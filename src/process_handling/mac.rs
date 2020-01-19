@@ -1,15 +1,16 @@
 use crate::errors::*;
 use nix::libc::*;
 use std::ffi::CString;
-use std::{mem::uninitialized, ptr};
+use std::{mem::MaybeUninit, ptr};
+use log::trace;
 
 fn execute(program: CString, argv: &[CString], envar: &[CString]) -> Result<(), RunError> {
-    let mut attr: posix_spawnattr_t = uninitialized();
-    let mut res = posix_spawn_attr_init(&mut attr);
+    let mut attr: MaybeUninit<posix_spawnattr_t> = MaybeUninit::uninit();
+    let mut res = posix_spawnattr_init(attr.as_mut_ptr());
     if res != 0 {
         trace!("Can't initialise posix_spawnattr_t");
     }
-
+    let mut attr = unsafe { attr.assume_init() };
     let flags = (POSIX_SPAWN_START_SUSPENDED | POSIX_SPAWN_SETEXEC | 0x0100) as i16;
 
     res = posix_spawnattr_setflags(&mut attr, flags);
@@ -26,7 +27,7 @@ fn execute(program: CString, argv: &[CString], envar: &[CString]) -> Result<(), 
     envs.push(ptr::null_mut());
 
     posix_spawnp(
-        ptr::nullptr(),
+        ptr::null_mut(),
         program.into_raw(),
         ptr::null_mut(),
         &attr,

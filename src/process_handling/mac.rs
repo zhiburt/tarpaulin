@@ -1,8 +1,10 @@
 use crate::errors::*;
 use nix::libc::*;
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::{mem::MaybeUninit, ptr};
 use log::trace;
+
+const DISABLE_ASLR: &CStr = unsafe { CStr::from_bytes_with_nul_unchecked(b"DYLD_NO_PIE=1\0") };
 
 fn execute(program: CString, argv: &[CString], envar: &[CString]) -> Result<(), RunError> {
     let mut attr: MaybeUninit<posix_spawnattr_t> = MaybeUninit::uninit();
@@ -23,7 +25,7 @@ fn execute(program: CString, argv: &[CString], envar: &[CString]) -> Result<(), 
     args.push(ptr::null_mut());
 
     let mut envs: Vec<*mut c_char> = envar.iter().map(|s| s.clone().into_raw()).collect();
-
+    envs.push(CString::from(DISABLE_ASLR).into_raw());
     envs.push(ptr::null_mut());
 
     posix_spawnp(

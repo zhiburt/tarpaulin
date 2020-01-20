@@ -117,8 +117,10 @@ pub fn get_test_coverage(
     if !test.exists() {
         return Ok(None);
     }
-    if let Err(e) = limit_affinity() {
-        warn!("Failed to set processor affinity {}", e);
+    #[cfg(target_os = "linux")] {
+        if let Err(e) = limit_affinity() {
+            warn!("Failed to set processor affinity {}", e);
+        }
     }
     match fork() {
         Ok(ForkResult::Parent { child }) => match collect_coverage(test, child, analysis, config) {

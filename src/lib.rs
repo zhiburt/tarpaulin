@@ -161,8 +161,10 @@ pub fn get_test_coverage(
     if !test.path().exists() {
         return Ok(None);
     }
-    if let Err(e) = limit_affinity() {
-        warn!("Failed to set processor affinity {}", e);
+    #[cfg(target_os = "linux")] {
+        if let Err(e) = limit_affinity() {
+            warn!("Failed to set processor affinity {}", e);
+        }
     }
     if let Some(log) = logger.as_ref() {
         log.push_binary(test.clone());

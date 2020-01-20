@@ -361,7 +361,8 @@ fn open_symbols_file(test: &Path) -> io::Result<File> {
 
 #[cfg(target_os = "macos")]
 fn open_symbols_file(test: &Path) -> io::Result<File> {
-    let d_sym = test.with_extension("dSYM");
+    let mut d_sym = test.with_extension("dSYM");
+    d_sym.push(PathBuf::from("Contents/Resources/DWARF").join(test));
     File::open(&d_sym)
 }
 

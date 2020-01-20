@@ -359,9 +359,8 @@ fn open_symbols_file(test: &Path) -> io::Result<File> {
 
 #[cfg(target_os = "macos")]
 fn open_symbols_file(test: &Path) -> io::Result<File> {
-    let mut d_sym = test.with_extension("dSYM");
-    d_sym.push(PathBuf::from("Contents/Resources/DWARF").join(test));
-    File::open(&d_sym)
+    let symbs = test.with_extension("dSYM").join("Contents/Resources/DWARF").join(test.file_name().unwrap());
+    File::open(&symbs)
 }
 
 pub fn generate_tracemap(

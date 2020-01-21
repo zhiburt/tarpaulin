@@ -45,5 +45,6 @@ syn = { version = "1.0", features = ["full"]}
 void = "1.0"
 walkdir = "2.3.1"
 
-[target.'cfg(target_os = "macos")'.dependencies.mach]
-version = "0.3.2"
+[target.'cfg(target_os = "macos")'.dependencies]
+mach = "0.3.2"
+core_affinity = "0.5.10"

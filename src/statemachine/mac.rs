@@ -15,8 +15,8 @@ pub fn create_state_machine<'a>(
     test: Pid,
     traces: &'a mut TraceMap,
     config: &'a Config,
-) -> (TestState, LinuxData<'a>) {
-    let mut data = LinuxData::new(traces, config);
+) -> (TestState, MacData<'a>) {
+    let mut data = MacData::new(traces, config);
     data.parent = test;
     (TestState::start_state(), data)
 }
@@ -47,8 +47,8 @@ impl From<&Pid> for ProcessInfo {
     }
 }
 
-/// Handle to linux process state
-pub struct LinuxData<'a> {
+/// Handle to macOS process state
+pub struct MacData<'a> {
     /// Recent results from waitpid to be handled by statemachine
     wait_queue: Vec<WaitStatus>,
     /// Current Pid to process
@@ -65,9 +65,9 @@ pub struct LinuxData<'a> {
     thread_count: isize,
 }
 
-impl<'a> StateData for LinuxData<'a> {
+impl<'a> StateData for MacData<'a> {
     fn start(&mut self) -> Result<Option<TestState>, RunError> {
-        match waitpid(self.current, Some(WaitPidFlag::WNOHANG)) {
+        match waitpid(self.current, Some(WaitPidFlag::WNOHANG | WaitPidFlag::WUNTRACED)) {
             Ok(WaitStatus::StillAlive) => Ok(None),
             Ok(sig @ WaitStatus::Stopped(_, Signal::SIGTRAP)) => {
                 if let WaitStatus::Stopped(child, _) = sig {
@@ -142,11 +142,6 @@ impl<'a> StateData for LinuxData<'a> {
                     result = Ok(Some(TestState::Stopped));
                     running = false;
                 }
-                // Ok(WaitStatus::PtraceEvent(_, _, _)) => {
-                //     self.wait_queue.push(wait.unwrap());
-                //     result = Ok(Some(TestState::Stopped));
-                //     running = false;
-                // }
                 Ok(s) => {
                     self.wait_queue.push(s);
                     result = Ok(Some(TestState::Stopped));
@@ -284,9 +279,9 @@ impl<'a> StateData for LinuxData<'a> {
     }
 }
 
-impl<'a> LinuxData<'a> {
-    pub fn new(traces: &'a mut TraceMap, config: &'a Config) -> LinuxData<'a> {
-        LinuxData {
+impl<'a> MacData<'a> {
+    pub fn new(traces: &'a mut TraceMap, config: &'a Config) -> MacData<'a> {
+        MacData {
             wait_queue: Vec::new(),
             current: Pid::from_raw(0),
             parent: Pid::from_raw(0),

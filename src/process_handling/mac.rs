@@ -41,3 +41,9 @@ pub fn execute(program: CString, argv: &[CString], envar: &[CString]) -> Result<
 
     Err(RunError::Internal)
 }
+
+pub fn limit_affinity() -> nix::Result<()> {
+    let core_ids = core_affinity::get_core_ids().unwrap();
+    core_affinity::set_for_current(core_ids[0]);
+    Ok(())
+}

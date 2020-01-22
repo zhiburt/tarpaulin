@@ -34,6 +34,9 @@ mod statemachine;
 pub mod test_loader;
 pub mod traces;
 
+#[cfg(target_os = "macos")]
+pub(crate) mod mach;
+
 mod ptrace_control;
 
 static DOCTEST_FOLDER: &str = "target/doctests";

@@ -10,6 +10,7 @@ use {std::convert, convert::TryInto};
 use nix::{Result, Error};
 use nix::errno::Errno;
 use nix::unistd::Pid;
+use nix::sys::ptrace::{RequestType, Request, AddressType};
 use mach::kern_return::{kern_return_t, KERN_SUCCESS};
 use mach::port::{mach_port_t};
 use mach::mach_types::task_t;
@@ -25,21 +26,13 @@ use mach::vm::{mach_vm_read, mach_vm_write, mach_vm_protect, mach_vm_region};
 use mach::vm_prot::{VM_PROT_COPY, VM_PROT_EXECUTE, VM_PROT_READ, VM_PROT_WRITE, VM_PROT_ALL,vm_prot_t};
 use mach::vm_page_size::{vm_page_size, mach_vm_trunc_page};
 use mach::vm_region::{VM_REGION_BASIC_INFO_64, vm_region_basic_info_64, vm_region_basic_info_64_t};
+use mach::message::{mach_msg};
 
 type ipc_port_t = *mut u8;
 
 type thread_state_flavor_array_t = *mut thread_state_flavor_t;
 
 extern "C" {
-    /*
-    kern_return_t
-    task_set_exception_ports(
-        task_t					task,
-        exception_mask_t		exception_mask,
-        ipc_port_t				new_port,
-        exception_behavior_t	new_behavior,
-        thread_state_flavor_t	new_flavor)
-    */
     fn task_get_exception_ports(
         task: task_t,
         exception_mask: exception_mask_t,
@@ -416,6 +409,20 @@ pub(crate) fn set_thread_state(thread: thread_act_t, new_state: x86_thread_state
             _ => Err(Error::from_errno(res.into()))
         }
     }
+}
+
+unsafe fn ptrace_other(
+    request: Request,
+    pid: Pid,
+    addr: AddressType,
+    data: c_int,
+) -> Result<c_int> {
+    Errno::result(libc::ptrace(
+        request as RequestType,
+        libc::pid_t::from(pid),
+        addr,
+        data,
+    )).map(|_| 0)
 }
 
 impl From<c_uint> for KernelRet {

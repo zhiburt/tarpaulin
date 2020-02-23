@@ -430,7 +430,7 @@ fn execute_test(
         argv.push(CString::new(s.as_bytes()).unwrap_or_default());
     }
 
-    execute(exec_path, &argv, envars.as_slice())
+    execute(exec_path, &argv, envars.as_slice()).map(|_| ())
 }
 
 #[cfg(test)]

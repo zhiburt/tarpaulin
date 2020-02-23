@@ -2,6 +2,7 @@
 #![allow(non_snake_case)]
 use crate::config::Config;
 use crate::errors::RunError;
+use crate::mach::MachProcess;
 use crate::statemachine::*;
 use log::{debug, trace};
 use nix::errno::Errno;
@@ -17,7 +18,6 @@ pub fn create_state_machine<'a>(
     config: &'a Config,
 ) -> (TestState, MacData<'a>) {
     let mut data = MacData::new(traces, config);
-    data.parent = test;
     (TestState::start_state(), data)
 }
 
@@ -67,7 +67,10 @@ pub struct MacData<'a> {
 
 impl<'a> StateData for MacData<'a> {
     fn start(&mut self) -> Result<Option<TestState>, RunError> {
-        match waitpid(self.current, Some(WaitPidFlag::WNOHANG | WaitPidFlag::WUNTRACED)) {
+        match waitpid(
+            self.current,
+            Some(WaitPidFlag::WNOHANG | WaitPidFlag::WUNTRACED),
+        ) {
             Ok(WaitStatus::StillAlive) => Ok(None),
             Ok(sig @ WaitStatus::Stopped(_, Signal::SIGTRAP)) => {
                 if let WaitStatus::Stopped(child, _) = sig {
@@ -129,10 +132,7 @@ impl<'a> StateData for MacData<'a> {
         let mut result = Ok(None);
         let mut running = true;
         while running {
-            let wait = waitpid(
-                Pid::from_raw(-1),
-                Some(WaitPidFlag::WNOHANG),
-            );
+            let wait = waitpid(Pid::from_raw(-1), Some(WaitPidFlag::WNOHANG));
             match wait {
                 Ok(WaitStatus::StillAlive) => {
                     running = false;

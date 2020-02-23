@@ -193,5 +193,5 @@ fn execute_test(test: &Path, ignored: bool, config: &Config) -> Result<(), RunEr
         argv.push(CString::new(s.as_bytes()).unwrap_or_default());
     }
 
-    execute(exec_path, &argv, envars.as_slice())
+    execute(exec_path, &argv, envars.as_slice()).map(|_| ())
 }

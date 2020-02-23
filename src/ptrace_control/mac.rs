@@ -97,9 +97,31 @@ pub fn set_instruction_pointer(pid: Pid, pc: u64) -> Result<c_long> {
     Ok(pc as i64)
 }
 
+unsafe fn ptrace_other(
+    request: Request,
+    pid: Pid,
+    addr: AddressType,
+    data: c_int,
+) -> Result<c_int> {
+    Errno::result(libc::ptrace(
+        request as RequestType,
+        libc::pid_t::from(pid),
+        addr,
+        data,
+    ))
+    .map(|_| 0)
+}
+
 pub fn request_trace() -> Result<()> {
-    traceme()
-    // Ok(())
+    traceme()?;
+    unsafe {
+        ptrace_other(
+            Request::PT_SIGEXC,
+            Pid::from_raw(0),
+            ptr::null_mut(),
+            0
+        ).map(|_| ())
+    }
 }
 
 pub fn get_event_data(pid: Pid) -> Result<c_long> {

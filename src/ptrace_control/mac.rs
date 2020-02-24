@@ -1,27 +1,31 @@
 #![allow(unused)]
 #![allow(non_camel_case_types)]
 
+use mach::kern_return::{kern_return_t, KERN_SUCCESS};
+use mach::mach_types::{task_port_t, thread_act_array_t, thread_act_t, vm_task_entry_t};
+use mach::message::mach_msg_type_number_t;
+use mach::structs::x86_thread_state64_t;
+use mach::thread_status::{thread_state_flavor_t, thread_state_t, x86_THREAD_STATE64};
+use mach::vm::{mach_vm_protect, mach_vm_read, mach_vm_region, mach_vm_write};
+use mach::vm_page_size::{mach_vm_trunc_page, vm_page_size};
+use mach::vm_prot::{
+    vm_prot_t, VM_PROT_ALL, VM_PROT_COPY, VM_PROT_EXECUTE, VM_PROT_READ, VM_PROT_WRITE,
+};
+use mach::vm_region::{
+    vm_region_basic_info_64, vm_region_basic_info_64_t, VM_REGION_BASIC_INFO_64,
+};
+use mach::vm_types::{integer_t, mach_vm_address_t, mach_vm_size_t, natural_t, vm_offset_t};
 use nix::errno::Errno;
-use nix::libc::{c_long, c_uint, c_int};
+use nix::libc::{c_int, c_long, c_uint};
 use nix::sys::ptrace::*;
 use nix::sys::signal::Signal;
 use nix::unistd::Pid;
 use nix::{Error, Result};
-use std::ptr;
 use std::mem;
-use std::slice;
 use std::mem::MaybeUninit;
-use std::{fmt::Display, convert::TryInto};
-use mach::kern_return::{kern_return_t, KERN_SUCCESS};
-use mach::mach_types::{thread_act_array_t, vm_task_entry_t, thread_act_t, task_port_t};
-use mach::message::mach_msg_type_number_t;
-use mach::thread_status::{x86_THREAD_STATE64, thread_state_flavor_t, thread_state_t};
-use mach::structs::x86_thread_state64_t;
-use mach::vm_types::{mach_vm_address_t, mach_vm_size_t, vm_offset_t, natural_t, integer_t};
-use mach::vm::{mach_vm_read, mach_vm_write, mach_vm_protect, mach_vm_region};
-use mach::vm_prot::{VM_PROT_COPY, VM_PROT_EXECUTE, VM_PROT_READ, VM_PROT_WRITE, VM_PROT_ALL,vm_prot_t};
-use mach::vm_page_size::{vm_page_size, mach_vm_trunc_page};
-use mach::vm_region::{VM_REGION_BASIC_INFO_64, vm_region_basic_info_64, vm_region_basic_info_64_t};
+use std::ptr;
+use std::slice;
+use std::{convert::TryInto, fmt::Display};
 
 type thread_flavor_t = natural_t;
 
@@ -94,9 +98,15 @@ const THREAD_BASIC_INFO: thread_flavor_t = 3;
 const THREAD_IDENTIFIER_INFO: thread_flavor_t = 4;
 const THREAD_EXTENDED_INFO: thread_flavor_t = 5;
 
-const THREAD_BASIC_INFO_COUNT: mach_msg_type_number_t = (mem::size_of::<thread_basic_info_data_t>() / mem::size_of::<natural_t>()) as mach_msg_type_number_t;
-const THREAD_IDENTIFIER_INFO_COUNT: mach_msg_type_number_t = (mem::size_of::<thread_identifier_info_data_t>() / mem::size_of::<natural_t>()) as mach_msg_type_number_t;
-const THREAD_EXTENDED_INFO_COUNT: mach_msg_type_number_t = (mem::size_of::<thread_extended_info_data_t>() / mem::size_of::<natural_t>()) as mach_msg_type_number_t;
+const THREAD_BASIC_INFO_COUNT: mach_msg_type_number_t = (mem::size_of::<thread_basic_info_data_t>()
+    / mem::size_of::<natural_t>())
+    as mach_msg_type_number_t;
+const THREAD_IDENTIFIER_INFO_COUNT: mach_msg_type_number_t =
+    (mem::size_of::<thread_identifier_info_data_t>() / mem::size_of::<natural_t>())
+        as mach_msg_type_number_t;
+const THREAD_EXTENDED_INFO_COUNT: mach_msg_type_number_t =
+    (mem::size_of::<thread_extended_info_data_t>() / mem::size_of::<natural_t>())
+        as mach_msg_type_number_t;
 
 extern "C" {
     pub fn thread_set_state(
@@ -133,28 +143,24 @@ pub fn continue_exec(pid: Pid, sig: Option<Signal>) -> Result<()> {
 pub fn single_step(pid: Pid) -> Result<()> {
     // let rip = current_instruction_pointer(pid)?;
     // loop {
-        unsafe {
-            Errno::clear();
-        }
-        println!("Single step");
-        let res = Errno::result(unsafe { libc::ptrace(
-            libc::PT_STEP,
-            libc::pid_t::from(pid),
-            1 as *mut i8,
-            0
-        ) })?;
-        // let res = Errno::result(unsafe { libc::ptrace(
-        //     libc::PT_STEP,
-        //     libc::pid_t::from(pid),
-        //     1 as *mut i8,
-        //     0
-        // ) })?;
-        // let res = step(pid, None)?;
+    unsafe {
+        Errno::clear();
+    }
+    println!("Single step");
+    let res = Errno::result(unsafe {
+        libc::ptrace(libc::PT_STEP, libc::pid_t::from(pid), 1 as *mut i8, 0)
+    })?;
+    // let res = Errno::result(unsafe { libc::ptrace(
+    //     libc::PT_STEP,
+    //     libc::pid_t::from(pid),
+    //     1 as *mut i8,
+    //     0
+    // ) })?;
+    // let res = step(pid, None)?;
     // }
     // Ok((res))
     Ok(())
 }
-
 
 pub fn read_address(pid: Pid, address: u64) -> Result<c_long> {
     let task_port = get_task_port(pid)?;
@@ -168,7 +174,7 @@ pub fn read_address(pid: Pid, address: u64) -> Result<c_long> {
             address,
             bytes_req,
             data_addr.as_mut_ptr(),
-            &mut bytes_read
+            &mut bytes_read,
         ) as u32);
         if res == KernelRet::Success {
             let data_addr = data_addr.assume_init();
@@ -207,7 +213,7 @@ impl From<c_uint> for KernelRet {
             37 => Terminated,
             46 => NotSupported,
             49 => OperationTimedOut,
-            e => Other(e)
+            e => Other(e),
         }
     }
 }
@@ -239,7 +245,7 @@ enum KernelRet {
     Terminated,
     NotSupported,
     OperationTimedOut,
-    Other(c_uint)
+    Other(c_uint),
 }
 
 impl Into<Errno> for KernelRet {
@@ -252,11 +258,8 @@ impl Into<Errno> for KernelRet {
 fn get_task_port(pid: Pid) -> Result<vm_task_entry_t> {
     let mut port: MaybeUninit<vm_task_entry_t> = MaybeUninit::uninit();
     unsafe {
-        let res = mach::traps::task_for_pid(
-            mach::traps::mach_task_self(),
-            pid.into(),
-            port.as_mut_ptr()
-        );
+        let res =
+            mach::traps::task_for_pid(mach::traps::mach_task_self(), pid.into(), port.as_mut_ptr());
         if res == KERN_SUCCESS {
             let port = port.assume_init();
             Ok(port)
@@ -274,15 +277,18 @@ fn check_prots(task: vm_task_entry_t, address: u64) -> Result<(u64, i32)> {
     let mut sz = 8;
     let mut name = 1;
     println!("REGION");
-    let res: KernelRet = unsafe { mach_vm_region(
-        task,
-        &mut address,
-        &mut sz,
-        VM_REGION_BASIC_INFO_64,
-        &mut region_info as *mut _ as *mut i32,
-        &mut size,
-        &mut name
-    ).into()};
+    let res: KernelRet = unsafe {
+        mach_vm_region(
+            task,
+            &mut address,
+            &mut sz,
+            VM_REGION_BASIC_INFO_64,
+            &mut region_info as *mut _ as *mut i32,
+            &mut size,
+            &mut name,
+        )
+        .into()
+    };
     let prot = region_info.protection;
     let max_prot = region_info.max_protection;
     println!("Protection = {}", prot);
@@ -297,18 +303,10 @@ fn set_prot_flag(task: vm_task_entry_t, address: u64, prots: i32) -> Result<()> 
     //     println!("Protections already correctly set!");
     //     return Ok(());
     // }
-    unsafe { 
-        let res: KernelRet = mach_vm_protect(
-            task,
-            address,
-            8 as u64,
-            0,
-            prots
-        ).into();
+    unsafe {
+        let res: KernelRet = mach_vm_protect(task, address, 8 as u64, 0, prots).into();
         match res {
-            KernelRet::Success => {
-                Ok(())
-            },
+            KernelRet::Success => Ok(()),
             _ => {
                 eprintln!("Kernel returned {:?}", res);
                 // let (addr, prot) = check_prots(task, addr)?;
@@ -329,7 +327,7 @@ pub fn write_to_address(pid: Pid, address: u64, data: i64) -> Result<()> {
             println!("current protection : {}", prot);
             if prot == VM_PROT_ALL {
                 break;
-            } 
+            }
             println!("setting prots");
             set_prot_flag(task_port, address, VM_PROT_COPY)?;
             set_prot_flag(task_port, address, VM_PROT_ALL)?;
@@ -337,12 +335,8 @@ pub fn write_to_address(pid: Pid, address: u64, data: i64) -> Result<()> {
         let bytes = &data as *const _ as *const u8 as usize;
         // let byte_addr = bytes.as_ptr() as usize;
 
-        let res: KernelRet = KernelRet::from(mach_vm_write(
-            task_port,
-            address,
-            bytes,
-            bytes_to_write,
-        ) as u32);
+        let res: KernelRet =
+            KernelRet::from(mach_vm_write(task_port, address, bytes, bytes_to_write) as u32);
         if res == KernelRet::Success {
             Ok(())
         } else {
@@ -356,17 +350,16 @@ fn threads_for_task<'a>(task: vm_task_entry_t) -> Result<&'a [thread_act_t]> {
     let mut thread_list: thread_act_array_t = ptr::null_mut();
     let mut thread_count: mach_msg_type_number_t = 0;
     unsafe {
-        let res: KernelRet = mach::task::task_threads(
-            task,
-            &mut thread_list,
-            &mut thread_count
-        ).into();
+        let res: KernelRet =
+            mach::task::task_threads(task, &mut thread_list, &mut thread_count).into();
         if res == KernelRet::Success {
             assert!(thread_count >= 1);
             println!("Thread count = {}", thread_count);
             let threads = slice::from_raw_parts(thread_list, thread_count as usize);
             println!("Threads = {:?}", threads);
-            println!("Current thread = {}", unsafe { mach::mach_init::mach_thread_self() });
+            println!("Current thread = {}", unsafe {
+                mach::mach_init::mach_thread_self()
+            });
             Ok(threads)
         } else {
             Err(Error::from_errno(res.into()))
@@ -376,14 +369,15 @@ fn threads_for_task<'a>(task: vm_task_entry_t) -> Result<&'a [thread_act_t]> {
 
 fn get_thread_info(thread: thread_act_t) -> Result<thread_identifier_info> {
     let mut info: MaybeUninit<thread_identifier_info> = MaybeUninit::uninit();
-    let mut count = THREAD_IDENTIFIER_INFO_COUNT; 
+    let mut count = THREAD_IDENTIFIER_INFO_COUNT;
     unsafe {
         let res: KernelRet = thread_info(
             thread,
             THREAD_IDENTIFIER_INFO,
             &mut info as *mut _ as thread_info_t,
-            &mut count
-        ).into();
+            &mut count,
+        )
+        .into();
         match res {
             KernelRet::Success => {
                 assert_eq!(count, 6);
@@ -391,7 +385,7 @@ fn get_thread_info(thread: thread_act_t) -> Result<thread_identifier_info> {
                 println!("Thread info for {} => {:?}", thread, info);
                 Ok(info)
             }
-            code => Err(Error::from_errno(code.into()))
+            code => Err(Error::from_errno(code.into())),
         }
     }
 }
@@ -399,7 +393,11 @@ fn get_thread_info(thread: thread_act_t) -> Result<thread_identifier_info> {
 fn test_thread_for_pid(pid: Pid) -> Result<thread_act_t> {
     let task = get_task_port(pid)?;
     let threads = threads_for_task(task)?;
-    let highest = threads.iter().map(|&t| (t, get_thread_info(t).unwrap().thread_id)).max_by_key(|&(t, tid)| tid).unwrap();
+    let highest = threads
+        .iter()
+        .map(|&t| (t, get_thread_info(t).unwrap().thread_id))
+        .max_by_key(|&(t, tid)| tid)
+        .unwrap();
     Ok(highest.0)
 }
 
@@ -412,14 +410,15 @@ fn get_thread_state(thread: thread_act_t) -> Result<x86_thread_state64_t> {
             thread,
             x86_THREAD_STATE64,
             &mut old_state as *mut _ as *mut u32,
-            &mut state_count
-        ).into();
+            &mut state_count,
+        )
+        .into();
         match res {
             KernelRet::Success => {
                 assert_eq!(expected, state_count);
                 Ok(old_state)
-            },
-            _ => Err(Error::from_errno(res.into()))
+            }
+            _ => Err(Error::from_errno(res.into())),
         }
     }
 }
@@ -432,11 +431,12 @@ fn set_thread_state(thread: thread_act_t, new_state: x86_thread_state64_t) -> Re
             thread,
             x86_THREAD_STATE64,
             &mut new_state as *mut _ as *mut u32,
-            state_count
-        ).into();
+            state_count,
+        )
+        .into();
         match res {
             KernelRet::Success => Ok(()),
-            _ => Err(Error::from_errno(res.into()))
+            _ => Err(Error::from_errno(res.into())),
         }
     }
 }
@@ -458,7 +458,9 @@ pub fn set_instruction_pointer(pid: Pid, pc: u64) -> Result<c_long> {
     let task = get_task_port(pid)?;
     let test_thread = test_thread_for_pid(pid)?;
     // unsafe { mach::thread_act::thread_suspend(test_thread); }
-    unsafe { mach::task::task_suspend(task); }
+    unsafe {
+        mach::task::task_suspend(task);
+    }
     println!("Test thread = {}", test_thread);
     let mut old_state = get_thread_state(test_thread)?;
     let old_pc = old_state.__rip;

@@ -1,9 +1,9 @@
 use crate::errors::*;
-use nix::libc::*;
 use crate::ptrace_control::*;
-use std::ffi::{CString};
-use std::{mem::MaybeUninit, ptr};
 use log::trace;
+use nix::libc::*;
+use std::ffi::CString;
+use std::{mem::MaybeUninit, ptr};
 
 const POSIX_SPAWN_DISABLE_ASLR: i32 = 0x0100;
 const POSIX_SPAWN_FLAGS: i16 = (POSIX_SPAWN_SETEXEC | POSIX_SPAWN_DISABLE_ASLR) as i16;
@@ -15,7 +15,7 @@ pub fn execute(program: CString, argv: &[CString], envar: &[CString]) -> Result<
         eprintln!("Can't initialise posix_spawnattr_t");
     }
     let mut attr = unsafe { attr.assume_init() };
-        
+
     res = unsafe { posix_spawnattr_setflags(&mut attr, POSIX_SPAWN_FLAGS) };
     if res != 0 {
         eprintln!("Failed to set spawn flags");
@@ -29,7 +29,7 @@ pub fn execute(program: CString, argv: &[CString], envar: &[CString]) -> Result<
     envs.push(ptr::null_mut());
 
     request_trace().map_err(|e| RunError::Trace(e.to_string()))?;
-    unsafe { 
+    unsafe {
         posix_spawnp(
             ptr::null_mut(),
             program.into_raw(),
@@ -41,8 +41,7 @@ pub fn execute(program: CString, argv: &[CString], envar: &[CString]) -> Result<
     }
 
     unsafe { posix_spawnattr_destroy(&mut attr) };
-    
-    
+
     Ok(())
 }
 

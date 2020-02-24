@@ -1,7 +1,7 @@
 use crate::errors::*;
-use nix::libc::*;
 use crate::ptrace_control::*;
-use std::ffi::{CString};
+use nix::libc::*;
+use std::ffi::CString;
 use std::{mem::MaybeUninit, ptr};
 
 const POSIX_SPAWN_DISABLE_ASLR: i32 = 0x0100;
@@ -10,11 +10,7 @@ const POSIX_SPAWN_FLAGS: i16 = (POSIX_SPAWN_START_SUSPENDED
     | POSIX_SPAWN_SETSIGMASK
     | POSIX_SPAWN_DISABLE_ASLR) as i16;
 
-pub fn execute(
-    program: CString,
-    argv: &[CString],
-    envar: &[CString],
-) -> Result<pid_t, RunError> {
+pub fn execute(program: CString, argv: &[CString], envar: &[CString]) -> Result<pid_t, RunError> {
     let mut attr: MaybeUninit<posix_spawnattr_t> = MaybeUninit::uninit();
     let mut res = unsafe { posix_spawnattr_init(attr.as_mut_ptr()) };
     if res != 0 {
@@ -51,7 +47,6 @@ pub fn execute(
 
     Ok(pid)
 }
-
 
 pub fn limit_affinity() -> nix::Result<()> {
     let core_ids = core_affinity::get_core_ids().unwrap();

@@ -1,18 +1,18 @@
 #![allow(unused)]
 #![allow(non_camel_case_types)]
 
+use crate::mach::*;
 use nix::errno::Errno;
-use nix::libc::{c_long, c_uint, c_int};
+use nix::libc::{c_int, c_long, c_uint};
 use nix::sys::ptrace::*;
 use nix::sys::signal::Signal;
 use nix::unistd::Pid;
 use nix::{Error, Result};
-use std::ptr;
 use std::mem;
-use std::slice;
 use std::mem::MaybeUninit;
-use std::{fmt::Display, convert::TryInto};
-use crate::mach::*;
+use std::ptr;
+use std::slice;
+use std::{convert::TryInto, fmt::Display};
 
 pub fn trace_children(pid: Pid) -> Result<()> {
     //TODO need to check support.
@@ -33,28 +33,24 @@ pub fn continue_exec(pid: Pid, sig: Option<Signal>) -> Result<()> {
 pub fn single_step(pid: Pid) -> Result<()> {
     // let rip = current_instruction_pointer(pid)?;
     // loop {
-        unsafe {
-            Errno::clear();
-        }
-        println!("Single step");
-        let res = Errno::result(unsafe { libc::ptrace(
-            libc::PT_STEP,
-            libc::pid_t::from(pid),
-            1 as *mut i8,
-            0
-        ) })?;
-        // let res = Errno::result(unsafe { libc::ptrace(
-        //     libc::PT_STEP,
-        //     libc::pid_t::from(pid),
-        //     1 as *mut i8,
-        //     0
-        // ) })?;
-        // let res = step(pid, None)?;
+    unsafe {
+        Errno::clear();
+    }
+    println!("Single step");
+    let res = Errno::result(unsafe {
+        libc::ptrace(libc::PT_STEP, libc::pid_t::from(pid), 1 as *mut i8, 0)
+    })?;
+    // let res = Errno::result(unsafe { libc::ptrace(
+    //     libc::PT_STEP,
+    //     libc::pid_t::from(pid),
+    //     1 as *mut i8,
+    //     0
+    // ) })?;
+    // let res = step(pid, None)?;
     // }
     // Ok((res))
     Ok(())
 }
-
 
 pub fn read_address(pid: Pid, address: u64) -> Result<c_long> {
     mach_read(pid, address)
@@ -81,7 +77,9 @@ pub fn set_instruction_pointer(pid: Pid, pc: u64) -> Result<c_long> {
     let task = get_task_port(pid)?;
     let test_thread = test_thread_for_pid(pid)?;
     // unsafe { mach::thread_act::thread_suspend(test_thread); }
-    unsafe { mach::task::task_suspend(task); }
+    unsafe {
+        mach::task::task_suspend(task);
+    }
     println!("Test thread = {}", test_thread);
     let mut old_state = get_thread_state(test_thread)?;
     let old_pc = old_state.__rip;
@@ -114,14 +112,7 @@ unsafe fn ptrace_other(
 
 pub fn request_trace() -> Result<()> {
     traceme()?;
-    unsafe {
-        ptrace_other(
-            Request::PT_SIGEXC,
-            Pid::from_raw(0),
-            ptr::null_mut(),
-            0
-        ).map(|_| ())
-    }
+    unsafe { ptrace_other(Request::PT_SIGEXC, Pid::from_raw(0), ptr::null_mut(), 0).map(|_| ()) }
 }
 
 pub fn get_event_data(pid: Pid) -> Result<c_long> {

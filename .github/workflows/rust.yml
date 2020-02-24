@@ -8,14 +8,15 @@ on:
 
 jobs:
   build:
-    runs-on: [ubuntu-latest, macos-latest]
     strategy:
       matrix:
+        platform: [ubuntu-latest, macos-latest]
         version:
           - stable
           - beta
           - nightly
       fail-fast: false
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v1
       - uses: actions-rs/toolchain@v1

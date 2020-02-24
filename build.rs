@@ -1,6 +1,6 @@
-use std::process::Command;
-use std::path::{PathBuf};
 use std::fs;
+use std::path::PathBuf;
+use std::process::Command;
 
 const MACH_DEFS: &'static str = "/usr/include/mach/mach_exc.defs";
 const MACH_EXC_SERVER: &'static str = "mach_excServer";

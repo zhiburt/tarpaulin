@@ -4,21 +4,34 @@ use std::fs;
 use std::path::PathBuf;
 #[cfg(target_os = "macos")]
 use std::process::Command;
+#[cfg(target_os = "macos")]
+use std::str;
 
 #[cfg(target_os = "macos")]
 fn setup_macos() {
-    const MACH_DEFS: &'static str = "/usr/include/mach/mach_exc.defs";
     const MACH_EXC_SERVER: &'static str = "mach_excServer";
+    let end_of_path = "/usr/include/mach/mach_exc.defs";
+    let mach_defs = match Command::new("xcrun").arg("--show-sdk-path").output() {
+        Err(_) => end_of_path.to_string(),
+        Ok(s) => {
+            let root = str::from_utf8(&s.stdout).unwrap_or_default().trim_end();
+            format!("{}{}", root, end_of_path)
+        }
+    };
+    println!("mach_exc.defs location {}", mach_defs);
 
     let mut mach_src_path = PathBuf::from("mach_interface/");
     if !mach_src_path.exists() {
         fs::create_dir(&mach_src_path).unwrap();
 
-        Command::new("mig")
-            .arg(MACH_DEFS)
+        let res = Command::new("mig")
+            .arg(&mach_defs)
             .current_dir(&mach_src_path)
-            .output()
-            .unwrap();
+            .output();
+        if res.is_err() {
+            fs::remove_dir(&mach_src_path).unwrap();
+            let _ = res.unwrap();
+        }
     }
     mach_src_path.push(MACH_EXC_SERVER);
     mach_src_path.set_extension("c");

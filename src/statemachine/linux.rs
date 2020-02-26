@@ -74,9 +74,10 @@ impl<'a> StateData for LinuxData<'a> {
                 trace!("Caught inferior transitioning to Initialise state");
                 Ok(Some(TestState::Initialise))
             }
-            Ok(_) => Err(RunError::TestRuntime(
-                "Unexpected signal when starting test".to_string(),
-            )),
+            Ok(s) => Err(RunError::TestRuntime(format!(
+                "Unexpected signal when starting test {:?}",
+                s
+            ))),
             Err(e) => Err(RunError::TestRuntime(format!(
                 "Error when starting test: {}",
                 e

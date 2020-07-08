@@ -261,18 +261,3 @@ fn execute_test(test: &TestBinary, ignored: bool, config: &Config) -> Result<(),
     }
     execute(exec_path, &argv, envars.as_slice())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn check_env() {
-        let conf = Config::default();
-        setup_environment(&conf);
-
-        let tarp_var = env::var("TARPAULIN").unwrap();
-        assert_eq!(tarp_var, "1");
-    }
-
-}

@@ -1,3 +1,4 @@
+use rustc_version::{version, version_meta, Channel};
 #[cfg(target_os = "macos")]
 use std::fs;
 #[cfg(target_os = "macos")]
@@ -41,6 +42,14 @@ fn setup_macos() {
 }
 
 fn main() {
+    assert!(version().expect("Couldn't get compiler version").major >= 1);
+
+    let channel = version_meta()
+        .expect("Couldn't get compiler metadata")
+        .channel;
+    if channel == Channel::Nightly {
+        println!("cargo:rustc-cfg=nightly");
+    }
     #[cfg(target_os = "macos")]
     setup_macos();
 }

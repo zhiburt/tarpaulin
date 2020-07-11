@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ matrix.version }}
@@ -26,8 +26,6 @@ jobs:
           components: rustfmt
       - name: clean
         run: cargo clean
-      - name: check formatting
-        run: cargo fmt -- --check
       - name: build
         run: cargo build --verbose
         env:
@@ -41,6 +39,8 @@ jobs:
         env:
           RUST_BACKTRACE: 1
         if: matrix.version == 'nightly'
+      - name: check formatting
+        run: cargo fmt -- --check
       - name: notify docker hub
         run: |
           curl --request POST \

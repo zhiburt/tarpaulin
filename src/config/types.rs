@@ -2,7 +2,6 @@ use clap::arg_enum;
 use coveralls_api::CiService;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use void::Void;
 
 arg_enum! {
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Deserialize, Serialize)]
@@ -11,11 +10,14 @@ arg_enum! {
         Doctests,
         Benchmarks,
         Examples,
+        Lib,
+        Bins,
+        AllTargets,
     }
 }
 
 arg_enum! {
-    #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
+    #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
     pub enum OutputFile {
         Json,
         Toml,
@@ -38,7 +40,7 @@ pub struct Ci(pub CiService);
 
 impl FromStr for Ci {
     /// This can never fail, so the error type is uninhabited.
-    type Err = Void;
+    type Err = std::convert::Infallible;
 
     #[inline]
     fn from_str(x: &str) -> Result<Ci, Self::Err> {

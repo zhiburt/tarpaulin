@@ -40,7 +40,7 @@ fn set_up_logging(debug: bool, verbose: bool) {
         .init();
 }
 
-const CI_SERVER_HELP: &'static str = "Name of service, supported services are:
+const CI_SERVER_HELP: &str = "Name of service, supported services are:
 travis-ci, travis-pro, circle-ci, semaphore, jenkins and codeship.
 If you are interfacing with coveralls.io or another site you can \
 also specify a name that they will recognise. Refer to their documentation for this.";
@@ -57,7 +57,21 @@ fn main() -> Result<(), String> {
             .args_from_usage(
                  "--config [FILE] 'Path to a toml file specifying a list of options this will override any other options set'
                  --ignore-config 'Ignore any project config files'
+                 --lib 'Test only this package's library unit tests'
+                 --bin [NAME]... 'Test only the specified binary`
+                 --bins 'Test all binaries'
+                 --example [NAME]... 'Test only the specified example'
+                 --examples 'Test all examples'
+                 --test [NAME]... 'Test only the specified test target'
+                 --tests 'Test all tests'
+                 --bench [NAME]... 'Test only the specified bench target'
+                 --benches 'Test all benches'
+                 --doc 'Test only this library's documentation'
+                 --all-targets 'Test all targets'
+                 --no-fail-fast 'Run all tests regardless of failure'
+                 --profile [NAME] 'Build artefacts with the specified profile'
                  --debug 'Show debug output - this is used for diagnosing issues with tarpaulin'
+                 --dump-traces 'Log tracing events and save to a json file. Also, enabled when --debug is used'
                  --verbose -v 'Show extra output'
                  --ignore-tests 'Ignore lines of test functions when collecting coverage'
                  --ignore-panics 'Ignore panic macros in tests'
@@ -70,7 +84,7 @@ fn main() -> Result<(), String> {
                  --coveralls [KEY]  'Coveralls key, either the repo token, or if you're using travis use $TRAVIS_JOB_ID and specify travis-{ci|pro} in --ciserver'
                  --report-uri [URI] 'URI to send report to, only used if the option --coveralls is used'
                  --no-default-features 'Do not include default features'
-                 --features [FEATURE]... 'Features to be included in the target project'
+                 --features [FEATURES]... 'Features to be included in the target project'
                  --all-features 'Build all available features'
                  --all        'Alias for --workspace (deprecated)'
                  --workspace 'Test all packages in the workspace'
@@ -82,6 +96,7 @@ fn main() -> Result<(), String> {
                  --no-run 'Compile tests but don't run coverage'
                  --locked 'Do not update Cargo.lock'
                  --frozen 'Do not update Cargo.lock or any caches'
+                 --target [TRIPLE] 'Compilation target triple'
                  --target-dir [DIR] 'Directory for all generated artifacts'
                  --offline 'Run without accessing the network'
                  -Z [FEATURES]...   'List of unstable nightly only flags'")
@@ -90,7 +105,7 @@ fn main() -> Result<(), String> {
                     .possible_values(&OutputFile::variants())
                     .multiple(true),
                 Arg::from_usage("--output-dir [PATH] 'Specify a custom directory to write report files'"),
-                Arg::from_usage("--run-types [TYPE] 'Type of the coverage run'")
+                Arg::from_usage("--run-types [TYPE]... 'Type of the coverage run'")
                     .possible_values(&RunType::variants())
                     .multiple(true),
                 Arg::from_usage("--root -r [DIR]  'Calculates relative paths to root directory. If --manifest-path isn't specified it will look for a Cargo.toml in root'")

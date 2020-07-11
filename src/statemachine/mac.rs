@@ -2,6 +2,7 @@
 #![allow(non_snake_case)]
 use crate::config::Config;
 use crate::errors::RunError;
+use crate::event_log::*;
 use crate::mach::MachProcess;
 use crate::statemachine::*;
 use log::{debug, trace};
@@ -16,6 +17,7 @@ pub fn create_state_machine<'a>(
     test: Pid,
     traces: &'a mut TraceMap,
     config: &'a Config,
+    event_log: &'a Option<EventLog>,
 ) -> (TestState, MacData<'a>) {
     let mut data = MacData::new(traces, config);
     (TestState::start_state(), data)
@@ -25,8 +27,8 @@ pub type UpdateContext = (TestState, TracerAction<ProcessInfo>);
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct ProcessInfo {
-    pid: Pid,
-    signal: Option<Signal>,
+    pub(crate) pid: Pid,
+    pub(crate) signal: Option<Signal>,
 }
 
 impl ProcessInfo {
@@ -93,10 +95,17 @@ impl<'a> StateData for MacData<'a> {
     fn init(&mut self) -> Result<TestState, RunError> {
         trace_children(self.current)?;
         for trace in self.traces.all_traces() {
+//<<<<<<< HEAD
             for addr in &trace.address {
                 match Breakpoint::new(self.current, *addr) {
                     Ok(bp) => {
                         let _ = self.breakpoints.insert(*addr, bp);
+/*=======
+            if let Some(addr) = trace.address {
+                match Breakpoint::new(self.current, addr) {
+                    Ok(bp) => {
+                        let _ = self.breakpoints.insert(addr, bp);
+>>>>>>> 191b22b8e394bd05f83ed8d3984d002bd88bbdd4*/
                     }
                     Err(e) if e == NixErr::Sys(Errno::EIO) => {
                         return Err(RunError::TestRuntime(

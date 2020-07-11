@@ -5,8 +5,161 @@ file.
 
 ## [Unreleased]
 ### Added
+- Added `--all-targets` to config file
 
 ### Changed
+- Actually pass `--all-targets` to cargo
+- Merge more CLI options with active config (no-run, no-default-features, 
+ignore-panics, forward-signals, run-ignored, release, count, all-features, 
+all-targets, line-coverage, branch-coverage, offline, timeout, features, 
+out, arguments passed to test executable, -Z)
+- Update stats for all traces when they match a single address
+- Correct handling of doc tests in workspaces as doctest name is relative to 
+package root not workspace root
+- Return an error if a doctest fails to compile
+- Include files with no coverable lines in Html report
+
+### Removed
+
+## [0.14.1] - 2020-07-01
+### Added
+- run-types for lib, bins and all-targets
+- `--tests` `--lib`, `--examples, `--bins`, `--doc`, `--benches`, 
+`--all-targets` flags matching `cargo test`
+- Add named test running and flags `--test`, `--example`, `--bin`, `--bench`
+- Equivalent options for `--no-fail-fast` and `--profile`
+- Filtering of `CARGO_HOME` contents when it exists in project directory
+- `--debug` or `--dump-traces` now outputs a json log format that can be used 
+to plot tarpaulin execution
+
+### Changed
+- Now merge run-types in configs
+
+### Removed
+
+## [0.14.0] - 2020-06-25
+### Added
+- Filtering for `cfg(not(tarpaulin_include))` also adding `--cfg=tarpaulin` to default config
+- Support for tool attribute `#[tarpaulin::skip]`
+
+### Changed
+
+### Removed
+
+# [0.13.4] - 2020-06-23 [YANKED]
+### Added
+- Add `--cfg=tarpaulin` to `RUSTFLAGS` this allows users to use
+`#[cfg(tarpaulin)]` and `#[cfg(not(tarpaulin))]`
+
+### Changed
+- Don't run executables when `--no-run` provided
+- `#[cfg(not(tarpaulin))]` blocks are ignored in source analysis
+
+### Removed 
+
+## [0.13.3] - 2020-06-06
+### Added
+
+### Changed
+- Fix issue where doc tests could hang if stdout buffer filled (#402)
+- No longer report test failure if a `should_panic` doc test is ran
+- Clean pre-existing doc tests from target/doctests directory
+- Always print stderr output from cargo when building project
+
+### Removed
+
+## [0.13.2] - 2020-05-25
+### Added
+
+### Changed
+- Make features argument optional again
+
+### Removed
+
+## [0.13.1] - 2020-05-25
+### Added
+
+### Changed
+- `frozen`, `locked`, `force-clean` and `ignore-tests` flags are now propagated
+to feature configurations.
+- `exclude` argument for packages is now propagated and any features existing
+in the `package` list are removed to avoid conflicts
+- Fixed regression where features weren't propagated
+
+### Removed
+
+## [0.13.0] - 2020-05-25
+### Added
+- Compilation target is now accepted through the `--target` parameter.
+
+### Changed
+- Examples coverage now runs the tests that would be ran with `cargo test --examples`
+- Look up previous report from correct target directory.
+- Added doc comments to ignorable lines in source analysis
+- Feature configurations in `tarpaulin.toml` are now run in order of declaration.
+- Compilation failure results in `cargo tarpaulin` execution failure.
+- `workspace` flag is correctly propagated to feature configurations.
+- `features` now takes in a string e.g. `"f1 f2"`, instead of an array of strings `["f1", "f2"]`.
+- `packages` and `exclude` in workspace configurations are now read.
+
+### Removed
+
+## [0.12.4] - 2020-05-10
+### Added
+
+- The `CARGO_TARPAULIN_TARGET_DIR` environment variable may be used to set the
+  default target directory for tarpaulin artifacts. The command line argument
+  has precedence.
+
+### Changed
+- Find target folder from metadata if not provided and place reports there (fixes running from packages inside workspaces)
+- Using date-locked toolchains no longer defaults to trying to use a toolchain with the channel name and no date
+- The following CLI options now take effect even when a custom config file is
+  in place: `output-dir`, `target-dir`, `root`, `coveralls`, `ciserver`,
+  `report-uri`.
+
+### Removed
+
+## [0.12.3] - 2020-04-16
+### Added
+- Ignore hidden files and folders based on a dot prefix to the folder or filename 
+
+### Changed
+- Update object and if an ELF section can't be parsed return an io error instead of letting it continue 
+with an empty section
+- Removed forcing of `opt-level` to 0
+- When `--debug` is provided now print the cargo command/arg list and pass `-vvv` to cargo
+- Create target directory if option given via `--target-dir` doesn't exist
+
+### Removed
+
+## [0.12.2] 2020-04-11
+### Changed
+- Fill in `CARGO_PKG_NAME`, `CARG_PKG_VERSION`, `CARGO_PKG_AUTHORS` and 
+`CARGO_MANIFEST_DIR` environment variables when launching tests
+- Filter out executables where profile test is false and run type is `Tests`
+
+## [0.12.1] 2020-04-09
+### Added
+
+### Changed
+- Can now pass a list of values for `--run-types`
+
+### Removed
+
+### Fixed
+- Get manifest directory for packages in workspace so working directory is the same as before 0.12.0
+
+## [0.12.0] 2020-04-06
+### Added
+- Concept of logical lines to map multiple physical lines to a single line for statistics added for split lets statements
+
+### Changed
+- Reverted Dockerfiles to full images added dockerfiles with `-slim` postfix for slim images
+- Added cURL to the slim images
+- `todo!()` macros are now ignored with the `--ignore-panics` flag
+- The HTML output report will no longer fail if a previous run contains a source file that no longer exists
+- Process expression preceding method call in source analysis
 
 ### Removed
 
@@ -17,7 +170,7 @@ file.
 ### Changed
 - Pulled `trace` function out of `run` in `main.rs` in order to expose public function for creating
   `TraceMap` structs.
-
+- Moved Dockerfiles to slim images
 
 ## [0.11.0] 2020-02-26
 ### Added

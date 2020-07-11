@@ -1,22 +1,28 @@
+use crate::cargo::TestBinary;
 use crate::config::*;
 use crate::errors::*;
+use crate::event_log::*;
+use crate::path_utils::*;
 use crate::process_handling::*;
 use crate::report::report_coverage;
 use crate::source_analysis::LineAnalysis;
 use crate::statemachine::*;
 use crate::test_loader::*;
 use crate::traces::*;
-use log::{info, trace, warn};
+use log::{error, info, trace, warn};
 use nix::unistd::*;
 use std::collections::HashMap;
 use std::env;
 use std::ffi::CString;
+use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
 
 pub mod breakpoint;
 mod cargo;
 pub mod config;
 pub mod errors;
+pub mod event_log;
+mod path_utils;
 mod process_handling;
 pub mod report;
 mod source_analysis;
@@ -31,36 +37,61 @@ mod ptrace_control;
 
 pub fn trace(configs: &[Config]) -> Result<TraceMap, RunError> {
     let mut tracemap = TraceMap::new();
+    let mut tarpaulin_result = Ok(());
     let mut ret = 0i32;
-    let mut failure = Ok(());
+    let logger = if configs.iter().any(|c| c.dump_traces) {
+        Some(EventLog::new())
+    } else {
+        None
+    };
 
     for config in configs.iter() {
         if config.name == "report" {
             continue;
         }
-        match launch_tarpaulin(config) {
+        if let Some(log) = logger.as_ref() {
+            let name = if config.name.is_empty() {
+                "<anonymous>".to_string()
+            } else {
+                config.name.clone()
+            };
+            log.push_config(name);
+        }
+        let tgt = config.target_dir();
+        if !tgt.exists() {
+            let create_dir_result = create_dir_all(&tgt);
+            if let Err(e) = create_dir_result {
+                warn!("Failed to create target-dir {}", e);
+            }
+        }
+        match launch_tarpaulin(config, &logger) {
             Ok((t, r)) => {
-                tracemap.merge(&t);
                 ret |= r;
+                tracemap.merge(&t);
             }
             Err(e) => {
-                info!("Failure {}", e);
-                if failure.is_ok() {
-                    failure = Err(e);
-                }
+                error!("{}", e);
+                tarpaulin_result = tarpaulin_result.and_then(|_| Err(e));
             }
         }
     }
     tracemap.dedup();
+
     if ret == 0 {
-        Ok(tracemap)
+        tarpaulin_result.map(|_| tracemap)
     } else {
         Err(RunError::TestFailed)
     }
 }
 
 pub fn run(configs: &[Config]) -> Result<(), RunError> {
-    let tracemap = trace(configs)?;
+    let mut tracemap = trace(configs)?;
+    if !configs.is_empty() {
+        // Assumption: all configs are for the same project
+        for dir in get_source_walker(&configs[0]) {
+            tracemap.add_file(dir.path());
+        }
+    }
     if configs.len() == 1 {
         report_coverage(&configs[0], &tracemap)?;
     } else if !configs.is_empty() {
@@ -80,7 +111,10 @@ pub fn run(configs: &[Config]) -> Result<(), RunError> {
 }
 
 /// Launches tarpaulin with the given configuration.
-pub fn launch_tarpaulin(config: &Config) -> Result<(TraceMap, i32), RunError> {
+pub fn launch_tarpaulin(
+    config: &Config,
+    logger: &Option<EventLog>,
+) -> Result<(TraceMap, i32), RunError> {
     if !config.name.is_empty() {
         info!("Running config {}", config.name);
     }
@@ -89,45 +123,60 @@ pub fn launch_tarpaulin(config: &Config) -> Result<(TraceMap, i32), RunError> {
 
     let mut result = TraceMap::new();
     let mut return_code = 0i32;
-    let project_analysis = source_analysis::get_line_analysis(config);
     info!("Building project");
     let executables = cargo::get_tests(config)?;
-    for exe in &executables {
-        let coverage = get_test_coverage(exe.path(), &project_analysis, config, false)?;
-        if let Some(res) = coverage {
-            result.merge(&res.0);
-            return_code |= res.1;
-        }
-        if config.run_ignored && exe.run_type() == RunType::Tests {
-            let coverage = get_test_coverage(exe.path(), &project_analysis, config, true)?;
+    if !config.no_run {
+        let project_analysis = source_analysis::get_line_analysis(config);
+        for exe in &executables {
+            if exe.should_panic() {
+                info!("Running a test executable that is expected to panic");
+            }
+            let coverage = get_test_coverage(&exe, &project_analysis, config, false, logger)?;
             if let Some(res) = coverage {
                 result.merge(&res.0);
-                return_code |= res.1;
+                return_code |= if exe.should_panic() {
+                    (res.1 == 0) as i32
+                } else {
+                    res.1
+                };
+            }
+            if config.run_ignored {
+                let coverage = get_test_coverage(&exe, &project_analysis, config, true, logger)?;
+                if let Some(res) = coverage {
+                    result.merge(&res.0);
+                    return_code |= res.1;
+                }
             }
         }
+        result.dedup();
     }
-    result.dedup();
     Ok((result, return_code))
 }
 
 /// Returns the coverage statistics for a test executable in the given workspace
 pub fn get_test_coverage(
-    test: &Path,
+    test: &TestBinary,
     analysis: &HashMap<PathBuf, LineAnalysis>,
     config: &Config,
     ignored: bool,
+    logger: &Option<EventLog>,
 ) -> Result<Option<(TraceMap, i32)>, RunError> {
-    if !test.exists() {
+    if !test.path().exists() {
         return Ok(None);
     }
     if let Err(e) = limit_affinity() {
         println!("Failed to set processor affinity {}", e);
     }
+    if let Some(log) = logger.as_ref() {
+        log.push_binary(test.clone());
+    }
     match fork() {
-        Ok(ForkResult::Parent { child }) => match collect_coverage(test, child, analysis, config) {
-            Ok(t) => Ok(Some(t)),
-            Err(e) => Err(RunError::TestCoverage(e.to_string())),
-        },
+        Ok(ForkResult::Parent { child }) => {
+            match collect_coverage(test.path(), child, analysis, config, logger) {
+                Ok(t) => Ok(Some(t)),
+                Err(e) => Err(RunError::TestCoverage(e.to_string())),
+            }
+        }
         Ok(ForkResult::Child) => {
             info!("Launching test");
             execute_test(test, ignored, config)?;
@@ -135,7 +184,7 @@ pub fn get_test_coverage(
         }
         Err(err) => Err(RunError::TestCoverage(format!(
             "Failed to run test {}, Error: {}",
-            test.display(),
+            test.path().display(),
             err.to_string()
         ))),
     }
@@ -147,12 +196,13 @@ fn collect_coverage(
     test: Pid,
     analysis: &HashMap<PathBuf, LineAnalysis>,
     config: &Config,
+    logger: &Option<EventLog>,
 ) -> Result<(TraceMap, i32), RunError> {
     let mut ret_code = 0;
     let mut traces = generate_tracemap(test_path, analysis, config)?;
     {
         trace!("Test PID is {}", test);
-        let (mut state, mut data) = create_state_machine(test, &mut traces, config);
+        let (mut state, mut data) = create_state_machine(test, &mut traces, config, logger);
         loop {
             state = state.step(&mut data, config)?;
             if state.is_finished() {
@@ -167,10 +217,13 @@ fn collect_coverage(
 }
 
 /// Launches the test executable
-fn execute_test(test: &Path, ignored: bool, config: &Config) -> Result<(), RunError> {
-    let exec_path = CString::new(test.to_str().unwrap()).unwrap();
-    info!("running {}", test.display());
-    let _ = env::set_current_dir(&config.root());
+fn execute_test(test: &TestBinary, ignored: bool, config: &Config) -> Result<(), RunError> {
+    let exec_path = CString::new(test.path().to_str().unwrap()).unwrap();
+    info!("running {}", test.path().display());
+    let _ = match test.manifest_dir() {
+        Some(md) => env::set_current_dir(&md),
+        None => env::set_current_dir(&config.root()),
+    };
 
     let mut envars: Vec<CString> = Vec::new();
 
@@ -193,5 +246,18 @@ fn execute_test(test: &Path, ignored: bool, config: &Config) -> Result<(), RunEr
         argv.push(CString::new(s.as_bytes()).unwrap_or_default());
     }
 
+    if let Some(s) = test.pkg_name() {
+        envars.push(CString::new(format!("CARGO_PKG_NAME={}", s)).unwrap_or_default());
+    }
+    if let Some(s) = test.pkg_version() {
+        envars.push(CString::new(format!("CARGO_PKG_VERSION={}", s)).unwrap_or_default());
+    }
+    if let Some(s) = test.pkg_authors() {
+        envars.push(CString::new(format!("CARGO_PKG_AUTHORS={}", s.join(":"))).unwrap_or_default());
+    }
+    if let Some(s) = test.manifest_dir() {
+        envars
+            .push(CString::new(format!("CARGO_MANIFEST_DIR={}", s.display())).unwrap_or_default());
+    }
     execute(exec_path, &argv, envars.as_slice()).map(|_| ())
 }

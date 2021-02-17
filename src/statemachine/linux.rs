@@ -445,7 +445,8 @@ impl<'a> LinuxData<'a> {
                     Err(NixErr::UnsupportedOperation) => {
                         debug!("Instrumentation address clash, ignoring 0x{:x}", addr);
                     }
-                    Err(_) => {
+                    Err(e) => {
+                        error!("Issue instrumenting test: {}", e);
                         return Err(RunError::TestRuntime(
                             "Failed to instrument test executable".to_string(),
                         ));

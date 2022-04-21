@@ -85,4 +85,21 @@ fn issue_610() {
     assert!(result.is_err());
 }
 
+#[test]
+fn error_if_theres_one_healthy_config_and_one_not() {
+    let test_dir = get_test_path("2 crates");
+    env::set_current_dir(&test_dir).unwrap();
+
+    let mut good_config = Config::default();
+    good_config.manifest = test_dir.join("success_test").join("Cargo.toml");
+    good_config.test_names.insert("foo".to_string());
+    good_config.set_clean(false);
+
+    let mut bad_config = Config::default();
+    bad_config.manifest = test_dir.join("failing_test").join("Cargo.toml");
+    bad_config.set_clean(false);
+
+    let result = run(&[good_config, bad_config.clone()]);
+    assert!(result.is_err());
+}
 }
